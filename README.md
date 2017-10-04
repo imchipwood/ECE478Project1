@@ -13,7 +13,6 @@ by Wojtyszko. Do not change text, follow suggested behaviors.
 
 ## Team Members
 
-- Jia Zhen <jiaz@pdx.edu>
 - Charles Wood <chawood@pdx.edu>
 - John Andersen <jsa3@pdx.edu>
 - Matty Baba Allos <matty@pdx.edu>
