@@ -41,7 +41,7 @@ make
 ./rme motion_4096.bin
 ```
 
-# Script
+## Script
 
 https://docs.google.com/document/d/1g50KcrZtzZmUPp70CNIAywEY4-nVsteM0bhQxtYUzBg/edit
 
