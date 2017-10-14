@@ -41,6 +41,10 @@ make
 ./rme motion_4096.bin
 ```
 
+# Script
+
+https://docs.google.com/document/d/1g50KcrZtzZmUPp70CNIAywEY4-nVsteM0bhQxtYUzBg/edit
+
 ## Detailed Requirements
 
 1. Learn documentation of HR-OS1 robot in full detail. Read
