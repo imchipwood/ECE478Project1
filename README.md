@@ -20,6 +20,31 @@ by Wojtyszko. Do not change text, follow suggested behaviors.
 - John Andersen <jsa3@pdx.edu>
 - Matty Baba Allos <matty@pdx.edu>
 
+## Getting started
+
+Clone the repo
+
+```console
+git clone --recursive git@github.com:mattybabaallos/ECE478Project1
+```
+
+Install dependencies
+
+```console
+sudo apt -y install libbluetooth-dev libncurses5-dev libjpeg-dev
+```
+
+Run rme
+```console
+cd HROS1-Framework/Linux/project/rme/
+make
+./rme motion_4096.bin
+```
+
+## Script
+
+https://docs.google.com/document/d/1g50KcrZtzZmUPp70CNIAywEY4-nVsteM0bhQxtYUzBg/edit
+
 ## Detailed Requirements
 
 1. Learn documentation of HR-OS1 robot in full detail. Read
