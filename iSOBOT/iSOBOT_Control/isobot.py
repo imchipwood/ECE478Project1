@@ -7,6 +7,10 @@ import re
 # http://web.cecs.pdx.edu/~mperkows/CLASS_479/Projects-2012/Mathias_Sunardi-iSobot_controller_report.pdf
 
 
+class iSobotException(Exception):
+	pass
+
+
 class iSobot(object):
 	serialPort = 0
 	# iSobot Command byte list
@@ -58,8 +62,8 @@ class iSobot(object):
 	CMD_21G = 0x3a  # taunt1
 	CMD_22G = 0x3b  # hit & down
 	CMD_23G = 0x3c  # dodge right, left, block left, head, fall down
-	#CMD_A = 0x3d
-	#CMD_B = 0x3e
+	CMD_A = 0x3d
+	CMD_B = 0x3e
 	CMD_1A = 0x3f  # "Roger!" raise right arm
 	CMD_2A = 0x40  # weird gesture
 	CMD_2A = 0x41  # "All your base are belong to isobot"
@@ -244,26 +248,28 @@ class iSobot(object):
 	CMD_3BEEPS_AND_SLIDE = 0xEE
 	# EF-FF unknown
 
-	def __init__(self, port='/dev/cu.usbserial-A8008pQc', baud=38400, databit=8, parity=None, debug=False):
-		self.logger = logging.getLogger(__name__)
-		if debug:
-			self.logger.setLevel('DEBUG')
-		else:
-			self.logger.setLevel('INFO')
-
-		self.logger.info("Initializing iSobot!")
+	def __init__(self, port='/dev/cu.usbserial-A8008pQc', baud=38400, databit=8, parity=None):
 		self._port = port
+		self._baud = baud
+		self._databit = databit
+		self._parity = parity
+		self._serialPort = None
+
+
+		# self.connect()
 		# port='/dev/tty.usbserial-A8008pQc' # Mac default USB
 		# port='/dev/tty.usbserial-A9007KX5' # The other Mac USB port
-		try:
-			#self._serialPort = serial.Serial(port, baud, bytesize=databit, parity='N')
-			self._serialPort = serial.Serial(port, baud, bytesize=databit, parity=parity)
-			self._serialPort.open()
-			if self._serialPort.isOpen():
-				self.logger.info("Serial port open")
-		except Exception as e:  # Catch exception in case serial connection fails
-			self.logger.exception("Unable to connect to serial port:\n{}".format(e))
-			raise e
+		# try:
+		# 	#self._serialPort = serial.Serial(port, baud, bytesize=databit, parity='N')
+		# 	print("Creating serial port")
+		# 	self._serialPort = serial.Serial(port, baud, bytesize=databit, parity=parity)
+		# 	if not self._serialPort.isOpen():
+		# 		print("Opening serial port")
+		# 		self._serialPort.open()
+		# 	print("Serial port open")
+		# except Exception as e:  # Catch exception in case serial connection fails
+		# 	print("Unable to connect to serial port:\n{}".format(e))
+		# 	raise e
 
 	"""
 	 # Construct command string
@@ -304,51 +310,69 @@ class iSobot(object):
 	 ## The command string becomes: [00101000]:[10110111]:[00000011] = 0x29b703
 	"""
 
-	def makeCmd(self, ch, type, cmd1, cmd2=0):
+	def calcChecksum(self, header, byte0, byte1, byte2):
+		s = header + byte0 + byte1 + byte2
+		s = (s & 7) + ((s >> 3) & 7) + ((s >> 6) & 7)
+		return s & 7
+
+	def makeCmd(self, ch, cmdType, cmd1, cmd2=0):
+		if ch not in [0, 1] or cmdType not in [0, 1]:
+			raise iSobotException("Channel or command type invalid. Valid channels/types are '0' and '1'")
+
 		param = 0x03
-		# Different header bytes depending on channel andtype. See: http://minkbot.blogspot.com/2009/08/isobotinfrared-remote-protocol-hack.html
-		if ch == 0 and type == 0:
-			hdr = 0x00
-		elif ch == 1 and type == 0:
-			hdr = 0x20
-		elif ch == 0 and type == 1:
-			hdr = 0x08
-		elif ch == 1 and type == 1:
-			hdr = 0x28
-		else:
-			return -1
+		# Different header bytes depending on channel andtype.
+		# See: http://minkbot.blogspot.com/2009/08/isobot-infrared-remote-protocol-hack.html
+		header = (ch << 5) + (cmdType << 3)
+		# if ch == 0 and type == 0:
+		# 	header = 0x00
+		# elif ch == 1 and type == 0:
+		# 	header = 0x20
+		# elif ch == 0 and type == 1:
+		# 	header = 0x08
+		# elif ch == 1 and type == 1:
+		# 	header = 0x28
 
 		# Calculate sum of command string. Checksum: 000
-		if type == 0:
-			sum = hdr + cmd1 + cmd2 + param  # For command type 0 (individual/manual arm control?)
-		elif type == 1:
-			sum = hdr + cmd1 + param  # For command type 1 (most commonly used)
-		else:
-			return -1
+		# if type == 0:
+		# 	sum = hdr + cmd1 + cmd2 + param  # For command type 0 (individual/manual arm control?)
+		# elif type == 1:
+		# 	sum = hdr + cmd1 + param  # For command type 1 (most commonly used)
+		# else:
+		# 	return -1
 
 		# Calculate checksum
-		chksum = ((sum & 7) + ((sum >> 3) & 7) + ((sum >> 6) & 7) & 7)
-		hdrsum = hdr + chksum
+		# chksum = ((sum & 7) + ((sum >> 3) & 7) + ((sum >> 6) & 7) & 7)
+		# hdrsum = hdr + chksum
 
-		# Construct the hex
-		if type == 0:
-			return hex(((hdrsum << 32) + (cmd1 << 16) + (cmd2 << 8) + (param)))  # byte string for type 0 commands
-		elif type == 1:
-			return hex(((hdrsum << 16) + (cmd1 << 8) + (param)))  # byte string for type 1 commands
+		checksum = self.calcChecksum(header, cmd1, cmd2, param)
+		headersum = header + checksum
+
+		# # Construct the hex
+		# if type == 0:
+		# 	return hex(((hdrsum << 32) + (cmd1 << 16) + (cmd2 << 8) + (param)))  # byte string for type 0 commands
+		# elif type == 1:
+		# 	return hex(((hdrsum << 16) + (cmd1 << 8) + (param)))  # byte string for type 1 commands
+		# else:
+		# 	return -1
+
+		if cmdType == 0:
+			# two cmds
+			return hex((headersum << 24) + (cmd1 << 16) + (cmd2 << 8) + param)
 		else:
-			return -1
+			# one command
+			return hex((headersum << 16) + (cmd1 << 8) + param)
 
 	def sendCmd(self, cmd):
 		# if serialPort.isOpen():
-		self.logger.info("sendCmd - port is open")
-		self.logger.info("sendCmd - command...")
+		print("sendCmd - port is open")
 		try:
 			for c in cmd:
-				self.logger.info("hex: {}".format(c))
-			self._serialPort.write(c)  # UNCOMMENT TO RUN  # serialPort.close()
-			self.logger.info("------------------")
+				print("hex: {}".format(c))
+				self._serialPort.write(c)  # UNCOMMENT TO RUN
+			#  serialPort.close()
+			print("------------------")
 		except serial.SerialException as e:
-			self.logger.exception("Port is not open/available:\n{}".format(e))
+			print("Port is not open/available:\n{}".format(e))
 		except Exception as e:
 			raise e
 
@@ -357,11 +381,11 @@ class iSobot(object):
 	# e.g. sending the Walk FWRD command once, the robot will accept the command but not move forward
 	def repeatCmd(self, cmd, rep=300):
 		for i in range(rep):
-			self.logger.info("Tx {}".format(i))
+			print("Tx {}".format(i))
 			self.sendCmd(cmd)
 			time.sleep(0.5)
 
-	def formatCmd(self, cmd):
+	def formatType1Cmd(self, cmd):
 		"""Format the hex string"""
 		# Remove leading 0x in hex string:
 		c = re.sub(r'0x', '', cmd)
@@ -375,52 +399,84 @@ class iSobot(object):
 		# Return the string as a list of characters:
 		# http://groups.google.com/group/comp.lang.python/browse_thread/thread/6543299e955388e2?pli=1
 		c = list(c)
-		self.logger.info("Command string: {}".format(c))
+		print("Command string: {}".format(c))
 		return c  # Must add '\r' at the end of each string
 
 	def isobotDoType1(self, action, channel=0, repeat=3):
 		# Shorthand function for lazy people
 		try:
-			self.repeatCmd(self.formatCmd(self.makeCmd(channel, 1, action)), repeat)
+			self.repeatCmd(self.formatType1Cmd(self.makeCmd(channel, 1, action)), repeat)
 			return False
 		except Exception as e:
-			self.logger.exception("Blargh! Command failed!\n{}".format(e))
+			print("Blargh! Command failed!\n{}".format(e))
 		return True
 
 	def disconnect(self):
-		self.logger.info("Closing serial port ...")
+		print("Closing serial port ...")
 		try:
 			self._serialPort.close()
-			self.logger.info("Port is closed.")
+			if self._serialPort.isOpen():
+				raise iSobotException("Port was not closed as expected")
+			print("Port is closed.")
 		except Exception as e:
-			self.logger.exception("Unable to close port:\n{}".format(e))
+			print("Unable to close port:\n{}".format(e))
 			raise e
 		return True
 
-	def connect(self, port, baud=38400, databit=8, par='N'):
-		if port == '':
-			self.logger.info("No port supplied. Will use previously used port.")
-		port = self._port
+	def connect(self, port=None, baud=None, databit=None, parity=None):
+
+		if not port:
+			port = self._port
+		if not baud:
+			baud = self._baud
+		if not databit:
+			databit = self._databit
+		if not parity:
+			parity = self._parity
 		try:
-			self.logger.info("Connecting to port {}".format(port))
-			self._serialPort = serial.Serial(port, baud, bytesize=databit, parity=par)
-			self._serialPort.open()
-			if self._serialPort.isOpen():
-				self.logger.info("Serial port is opened.")
+			print("Connecting to port {}".format(port))
+			self._serialPort = serial.Serial(port, baud, bytesize=databit, parity=parity)
+			if not self._serialPort.isOpen():
+				self._serialPort.open()
+				print("Serial port is opened.")
 		except Exception as e:
-			self.logger.info("Unable to connect to serial port:\n{}".format(e))
+			print("Unable to connect to serial port:\n{}".format(e))
 			raise e
 		return True
 
 
 if __name__ == "__main__":
-	bot = iSobot(
-		port="",
-		baud=38400,
-		databit=8,
-		parity="N",
-		debug=False
-	)
+	port = "/dev/cu.usbserial-AH00S7CX"
+	baud = 38400
+	# baud = 57600
+	databit = 8
+	parity = "N"
 
-	cmd = bot.makeCmd(ch=0, type=1, cmd1=bot.CMD_3BEEPS, cmd2=bot.CMD_CHEER1)
-	bot.sendCmd(cmd)
+	bot = iSobot(
+		port=port,
+		baud=baud,
+		databit=databit,
+		parity=parity
+	)
+	commands = [
+		(0, bot.CMD_2G),
+		(0, 0x00),
+		(1, bot.CMD_2G),
+		(1, 0x00),
+	]
+	try:
+		bot.connect()
+		for ch, cmd in commands:
+			print("{},{:02x}".format(ch, cmd))
+			bot.isobotDoType1(cmd, ch, repeat=1)
+			time.sleep(2)
+			# bot.disconnect()
+			# time.sleep(3)
+
+	except KeyboardInterrupt:
+		print("keyboard interrupt, stopping")
+		pass
+	except Exception as e:
+		raise e
+	finally:
+		bot.disconnect()
