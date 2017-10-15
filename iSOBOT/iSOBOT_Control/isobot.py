@@ -1,5 +1,4 @@
-import logging
-import serial
+import requests
 import time
 import re
 
@@ -248,28 +247,8 @@ class iSobot(object):
 	CMD_3BEEPS_AND_SLIDE = 0xEE
 	# EF-FF unknown
 
-	def __init__(self, port='/dev/cu.usbserial-A8008pQc', baud=38400, databit=8, parity=None):
-		self._port = port
-		self._baud = baud
-		self._databit = databit
-		self._parity = parity
-		self._serialPort = None
-
-
-		# self.connect()
-		# port='/dev/tty.usbserial-A8008pQc' # Mac default USB
-		# port='/dev/tty.usbserial-A9007KX5' # The other Mac USB port
-		# try:
-		# 	#self._serialPort = serial.Serial(port, baud, bytesize=databit, parity='N')
-		# 	print("Creating serial port")
-		# 	self._serialPort = serial.Serial(port, baud, bytesize=databit, parity=parity)
-		# 	if not self._serialPort.isOpen():
-		# 		print("Opening serial port")
-		# 		self._serialPort.open()
-		# 	print("Serial port open")
-		# except Exception as e:  # Catch exception in case serial connection fails
-		# 	print("Unable to connect to serial port:\n{}".format(e))
-		# 	raise e
+	def __init__(self, url="http://192.168.4.1"):
+		self._url = url
 
 	"""
 	 # Construct command string
@@ -315,45 +294,17 @@ class iSobot(object):
 		s = (s & 7) + ((s >> 3) & 7) + ((s >> 6) & 7)
 		return s & 7
 
-	def makeCmd(self, ch, cmdType, cmd1, cmd2=0):
+	def makeCmd(self, ch=0, cmdType=1, cmd1=0, cmd2=0):
 		if ch not in [0, 1] or cmdType not in [0, 1]:
 			raise iSobotException("Channel or command type invalid. Valid channels/types are '0' and '1'")
 
+		# param is constant @ 0x03
 		param = 0x03
-		# Different header bytes depending on channel andtype.
-		# See: http://minkbot.blogspot.com/2009/08/isobot-infrared-remote-protocol-hack.html
-		header = (ch << 5) + (cmdType << 3)
-		# if ch == 0 and type == 0:
-		# 	header = 0x00
-		# elif ch == 1 and type == 0:
-		# 	header = 0x20
-		# elif ch == 0 and type == 1:
-		# 	header = 0x08
-		# elif ch == 1 and type == 1:
-		# 	header = 0x28
-
-		# Calculate sum of command string. Checksum: 000
-		# if type == 0:
-		# 	sum = hdr + cmd1 + cmd2 + param  # For command type 0 (individual/manual arm control?)
-		# elif type == 1:
-		# 	sum = hdr + cmd1 + param  # For command type 1 (most commonly used)
-		# else:
-		# 	return -1
 
 		# Calculate checksum
-		# chksum = ((sum & 7) + ((sum >> 3) & 7) + ((sum >> 6) & 7) & 7)
-		# hdrsum = hdr + chksum
-
+		header = (ch << 5) + (cmdType << 3)
 		checksum = self.calcChecksum(header, cmd1, cmd2, param)
 		headersum = header + checksum
-
-		# # Construct the hex
-		# if type == 0:
-		# 	return hex(((hdrsum << 32) + (cmd1 << 16) + (cmd2 << 8) + (param)))  # byte string for type 0 commands
-		# elif type == 1:
-		# 	return hex(((hdrsum << 16) + (cmd1 << 8) + (param)))  # byte string for type 1 commands
-		# else:
-		# 	return -1
 
 		if cmdType == 0:
 			# two cmds
@@ -363,16 +314,15 @@ class iSobot(object):
 			return hex((headersum << 16) + (cmd1 << 8) + param)
 
 	def sendCmd(self, cmd):
-		# if serialPort.isOpen():
-		print("sendCmd - port is open")
 		try:
-			for c in cmd:
-				print("hex: {}".format(c))
-				self._serialPort.write(c)  # UNCOMMENT TO RUN
-			#  serialPort.close()
-			print("------------------")
-		except serial.SerialException as e:
-			print("Port is not open/available:\n{}".format(e))
+			url = "{}/cmd:{}".format(self._url, cmd)
+			r = requests.post(url, data={'cmd': cmd})
+			if r.status_code == 200:
+				print("HTTP Post success!")
+			else:
+				print("HTTP Post failed. Status, reason: {}, {}".format(r.status_code, r.reason))
+		except requests.exceptions.ConnectionError as e:
+			print("HTTP post failed: {}".format(e))
 		except Exception as e:
 			raise e
 
@@ -383,7 +333,7 @@ class iSobot(object):
 		for i in range(rep):
 			print("Tx {}".format(i))
 			self.sendCmd(cmd)
-			time.sleep(0.5)
+			time.sleep(0.1)
 
 	def formatType1Cmd(self, cmd):
 		"""Format the hex string"""
@@ -398,85 +348,47 @@ class iSobot(object):
 
 		# Return the string as a list of characters:
 		# http://groups.google.com/group/comp.lang.python/browse_thread/thread/6543299e955388e2?pli=1
-		c = list(c)
+		# c = list(c)
 		print("Command string: {}".format(c))
 		return c  # Must add '\r' at the end of each string
 
 	def isobotDoType1(self, action, channel=0, repeat=3):
 		# Shorthand function for lazy people
 		try:
-			self.repeatCmd(self.formatType1Cmd(self.makeCmd(channel, 1, action)), repeat)
-			return False
+			cmd = self.formatType1Cmd(self.makeCmd(channel, 1, action))
+			self.repeatCmd(cmd, repeat)
 		except Exception as e:
 			print("Blargh! Command failed!\n{}".format(e))
-		return True
+			return False
 
-	def disconnect(self):
-		print("Closing serial port ...")
-		try:
-			self._serialPort.close()
-			if self._serialPort.isOpen():
-				raise iSobotException("Port was not closed as expected")
-			print("Port is closed.")
-		except Exception as e:
-			print("Unable to close port:\n{}".format(e))
-			raise e
-		return True
-
-	def connect(self, port=None, baud=None, databit=None, parity=None):
-
-		if not port:
-			port = self._port
-		if not baud:
-			baud = self._baud
-		if not databit:
-			databit = self._databit
-		if not parity:
-			parity = self._parity
-		try:
-			print("Connecting to port {}".format(port))
-			self._serialPort = serial.Serial(port, baud, bytesize=databit, parity=parity)
-			if not self._serialPort.isOpen():
-				self._serialPort.open()
-				print("Serial port is opened.")
-		except Exception as e:
-			print("Unable to connect to serial port:\n{}".format(e))
-			raise e
 		return True
 
 
 if __name__ == "__main__":
-	port = "/dev/cu.usbserial-AH00S7CX"
-	baud = 38400
-	# baud = 57600
-	databit = 8
-	parity = "N"
 
-	bot = iSobot(
-		port=port,
-		baud=baud,
-		databit=databit,
-		parity=parity
-	)
+	bot = iSobot()
 	commands = [
-		(0, bot.CMD_2G),
-		(0, 0x00),
-		(1, bot.CMD_2G),
-		(1, 0x00),
+		# (0, bot.CMD_CHEER1),
+		# (0, bot.CMD_GORILLA),
+		# (0, bot.CMD_MOONWALK),
+		# (0, bot.CMD_42B),
+		# (0, bot.CMD_1P),
+		# (0, bot.CMD_3BEEPS),
+		# (0, bot.CMD_2G),
+		(0, bot.CMD_FWRD),
+		# (0, 0x00),
+		# (0, bot.CMD_21K),
+		# (0, bot.CMD_22K),
+		# (1, 0x00),
 	]
 	try:
-		bot.connect()
 		for ch, cmd in commands:
 			print("{},{:02x}".format(ch, cmd))
-			bot.isobotDoType1(cmd, ch, repeat=1)
-			time.sleep(2)
-			# bot.disconnect()
-			# time.sleep(3)
+			bot.isobotDoType1(cmd, ch, repeat=10)
+			time.sleep(8)
 
 	except KeyboardInterrupt:
 		print("keyboard interrupt, stopping")
 		pass
 	except Exception as e:
 		raise e
-	finally:
-		bot.disconnect()
