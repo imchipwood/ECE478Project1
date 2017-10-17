@@ -331,26 +331,23 @@ class iSobot(object):
 	# e.g. sending the Walk FWRD command once, the robot will accept the command but not move forward
 	def repeatCmd(self, cmd, rep=300):
 		for i in range(rep):
-			print("Tx {}".format(i))
+			# print("Tx {}".format(i))
 			self.sendCmd(cmd)
 			time.sleep(0.1)
 
 	def formatType1Cmd(self, cmd):
 		"""Format the hex string"""
-		# Remove leading 0x in hex string:
-		c = re.sub(r'0x', '', cmd)
+		# Remove leading 0x in hex string
+		cmd = re.sub(r'0x', '', cmd)
 
-		# The string must be 6 digits long.
-		# Check; if not, add with a leading 0 (assuming the command is type 1 and can only vary
-		# between 5 or 6 characters
-		c = c.zfill(6)
-		c = c + '\r'
-
-		# Return the string as a list of characters:
-		# http://groups.google.com/group/comp.lang.python/browse_thread/thread/6543299e955388e2?pli=1
-		# c = list(c)
+		# The string must be 6 digits long
+		cmd = cmd.zfill(6)
+		
+		# Needs carriage return
+		cmd += '\r'
+		
 		print("Command string: {}".format(c))
-		return c  # Must add '\r' at the end of each string
+		return c
 
 	def isobotDoType1(self, action, channel=0, repeat=3):
 		# Shorthand function for lazy people
@@ -358,8 +355,8 @@ class iSobot(object):
 			cmd = self.formatType1Cmd(self.makeCmd(channel, 1, action))
 			self.repeatCmd(cmd, repeat)
 		except Exception as e:
-			print("Blargh! Command failed!\n{}".format(e))
-			return False
+			print("FAILED: action {}, channel {}, repeat {}".format(action, channel, repeat))
+			raise e
 
 		return True
 
