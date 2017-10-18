@@ -1,3 +1,6 @@
 [submodule "HROS1-Framework"]
 	path = HROS1-Framework
 	url = https://github.com/pdxjohnny/HROS1-Framework.git
+[submodule "iSOBOT_ESP8266"]
+	path = iSOBOT_ESP8266
+	url = https://github.com/imchipwood/iSOBOT_ESP8266
