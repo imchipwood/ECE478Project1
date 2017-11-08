@@ -1,0 +1,14 @@
+Image for HR-OS1 (version 2)
+
+Raspbian ==> wheezy
+*For Raspberry Pi 2
+
+Suggested to use a micrSD that is Class 10 and at least 8 GB.
+Be sure to format as a bootable drive.
+
+File Details:
+name: hros1_v2.img
+size: 7.4 GB
+
+Download Link:
+https://drive.google.com/open?id=1BYEpkxEo1_DGYQ4JMi2QSnJ_SP-Vf8_o
